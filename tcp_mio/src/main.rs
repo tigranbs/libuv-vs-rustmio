@@ -71,22 +71,20 @@ fn main() {
                                 Err(_) => break
                             };
 
-                            let t = match conns.vacant_entry() {
-                                Some(entry) => {
-                                    let c = Conn{
-                                        socket: sock,
-                                        write_queue: VecDeque::new()
-                                    };
-                                    entry.insert(c).index()
-                                }
-                                None => {
-                                    panic!("Failed to insert connection into slab");
-                                }
+                            if conns.vacant_entry().is_none() {
+                                let amt = conns.len();
+                                conns.reserve_exact(amt);
+                            }
+                            let entry = conns.vacant_entry().unwrap();
+                            let c = Conn{
+                                socket: sock,
+                                write_queue: VecDeque::new()
                             };
 
-                            let ref conn = conns[t];
+                            poll.register(&c.socket, entry.index(), Ready::readable(), PollOpt::edge()).unwrap();
 
-                            poll.register(&conn.socket, t, Ready::readable(), PollOpt::edge()).unwrap();
+
+                            entry.insert(c);
                         }
                     }
 
