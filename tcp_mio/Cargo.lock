@@ -3,6 +3,7 @@ name = "tcp_mio"
 version = "0.1.0"
 dependencies = [
  "mio 0.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "slab 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

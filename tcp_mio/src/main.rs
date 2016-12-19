@@ -1,27 +1,28 @@
 extern crate mio;
+extern crate slab;
 
 use mio::{Token, Poll, Ready, PollOpt, Events};
 use mio::tcp::{TcpListener, TcpStream};
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::collections::BTreeMap;
-use std::collections::LinkedList;
-use std::os::unix::io::AsRawFd;
+use std::collections::VecDeque;
 use std::io::{Read, Write, ErrorKind};
 
-const SERVER_TOKEN: Token = Token(1);
+type Slab<T> = slab::Slab<T, Token>;
+
+const SERVER_TOKEN: Token = Token(10_000_000);
 
 struct Conn {
     socket: TcpStream,
-    write_queue: LinkedList<Vec<u8>>
+    write_queue: VecDeque<Vec<u8>>
 }
 
 fn main() {
     // buffer for reading bath of data for better performance
     let mut readable_buffer = [0; 64000];
 
-    // making basic BTreeMap for client connections
-    let mut clients: BTreeMap<Token, Conn> = BTreeMap::new();
+    // a list of connections _accepted_ by our server
+    let mut conns = Slab::with_capacity(128);
 
     // making Poll object
     let poll = Poll::new().unwrap();
@@ -53,8 +54,8 @@ fn main() {
                 }
 
                 // if error is for one of our client connections
-                // just removing it from map, so it would be deallocated and would be closed
-                clients.remove(&token);
+                // just removing it from the slab, so it would be deallocated and would be closed
+                conns.remove(token);
                 continue;
             }
 
@@ -70,16 +71,22 @@ fn main() {
                                 Err(_) => break
                             };
 
-                            // extracting FD file handler for converting that "int" to Token for registering event
-                            // NOTE: this principle will work only for nix based OS's
-                            let t = Token((sock.as_raw_fd() as usize) + 2);
-                            // registering accepted socket for reading data
-                            poll.register(&sock, t, Ready::readable(), PollOpt::edge()).unwrap();
-                            // keeping connection in our list
-                            clients.insert(t, Conn{
-                                socket: sock,
-                                write_queue: LinkedList::new()
-                            });
+                            let t = match conns.vacant_entry() {
+                                Some(entry) => {
+                                    let c = Conn{
+                                        socket: sock,
+                                        write_queue: VecDeque::new()
+                                    };
+                                    entry.insert(c).index()
+                                }
+                                None => {
+                                    panic!("Failed to insert connection into slab");
+                                }
+                            };
+
+                            let ref conn = conns[t];
+
+                            poll.register(&conn.socket, t, Ready::readable(), PollOpt::edge()).unwrap();
                         }
                     }
 
@@ -88,10 +95,7 @@ fn main() {
                         {
                             // trying to get Client connection based on Token
                             // if we don't have connection with that token, then just moving forward to the next event
-                            let mut conn = match clients.get_mut(&token) {
-                                Some(c) => c,
-                                None => continue
-                            };
+                            let ref mut conn = conns[token];
 
                             // reading socket data until the end
                             loop {
@@ -125,7 +129,7 @@ fn main() {
 
                         // if we need to close connection then just removing it from our list
                         if need_to_close {
-                            clients.remove(&token);
+                            conns.remove(token);
                         }
                     }
                 }
@@ -143,10 +147,7 @@ fn main() {
                     _ => {
                         // trying to get Client connection based on Token
                         // if we don't have connection with that token, then just moving forward to the next event
-                        let mut conn = match clients.get_mut(&token) {
-                            Some(c) => c,
-                            None => continue
-                        };
+                        let ref mut conn = conns[token];
 
                         // trying to write all writable queue
                         loop {
