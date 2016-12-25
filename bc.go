@@ -50,12 +50,18 @@ func run_connection(address string, buffer []byte) {
 	// just to free up socket buffer sent by echo server
 	readable_buffer := make([]byte, 64000)
 
+	go func()  {
+		for {
+			_, err = conn.Read(readable_buffer)
+			if err != nil {
+				conn.Close()
+				return
+			}
+		}
+	}()
+
 	for {
 		conn.Write(buffer)
-		_, err = conn.Read(readable_buffer)
-		if err != nil {
-			conn.Close()
-			return
-		}
+		time.Sleep(time.Millisecond * 100)
 	}
 }
