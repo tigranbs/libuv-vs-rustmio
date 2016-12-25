@@ -12,7 +12,7 @@ So the basic usage is following
 #### Running MIO Tcp Echo server - you will need Rust and Cargo installed
 ```bash
 # this will start TCP echo server on port 8888
-cd tcp_mio/ && cargo run
+cd tcp_mio/ && cargo run --release
 
 ```
 #### Running Libuv Tcp Echo server
