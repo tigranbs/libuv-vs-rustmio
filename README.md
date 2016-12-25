@@ -30,7 +30,7 @@ cd tcp_uv && ./build.sh
 # you can choose any file for benchmarking
 go run bc.go localhost:8888 100 LICENSE
 ```
-**NOTE:** Make use that file is not large, because you may crash your OS. During TCP Write process bytes would stay in memory until write is done.
+**NOTE:** Make sure that file is not large, because you may crash your OS. During TCP Write process bytes would stay in memory until write is done.
 
 # Results
 I'll add some results for multiple OS's and instances
