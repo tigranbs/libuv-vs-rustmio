@@ -10,7 +10,7 @@ import (
 )
 
 func main() {
-	// reading file and keeping it in memory for sending it 
+	// reading file and keeping it in memory for sending it
 	// as a batch of data
 	buffer, err := ioutil.ReadFile(os.Args[3])
 	if err != nil {
