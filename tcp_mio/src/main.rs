@@ -108,10 +108,30 @@ fn main() {
                                             need_to_close = true;
                                             break;
                                         } else {
-                                            // adding read data to writable queue for sending back to the client socket
-                                            conn.write_queue.push_back(Vec::from(&readable_buffer[0..rs]));
-                                            // making connection writable to fire write event
-                                            poll.reregister(&conn.socket, token, Ready::readable() | Ready::writable(), PollOpt::edge()).unwrap();
+                                            // writing buffer to socket and getting size of how match bytes written
+                                            // if we are getting an error then we will try to write to connecton on next cycle
+                                            let write_size = match conn.socket.write(&readable_buffer[0..rs]) {
+                                                Ok(ws) => ws,
+                                                Err(_) => {
+                                                    // we need to add buffer back to write it later
+                                                    conn.write_queue.push_back(Vec::from(&readable_buffer[0..rs]));
+
+                                                    // making connection writable to fire write event
+                                                    poll.reregister(&conn.socket, token, Ready::readable() | Ready::writable(), PollOpt::edge()).unwrap();
+                                                    break;
+                                                }
+                                            };
+
+                                            // if we have pending data for this buffer
+                                            // then we need to split buffer and make connection writable again
+                                            if write_size < rs {
+                                                // adding pending data back to the queue for writing it again
+                                                conn.write_queue.push_back(Vec::from(&readable_buffer[write_size..rs]));
+
+                                                // making connection writable to fire write event
+                                                poll.reregister(&conn.socket, token, Ready::readable() | Ready::writable(), PollOpt::edge()).unwrap();
+                                                break;
+                                            }
                                         }
                                     },
                                     Err(e) => {
